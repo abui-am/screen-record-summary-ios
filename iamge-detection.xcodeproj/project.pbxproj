@@ -6,8 +6,49 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		744BED202FBCDA2000B0BF29 /* SampleHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 744BED102FBCDA2000B0BF29 /* SampleHandler.swift */; };
+		744BED212FBCDA2000B0BF29 /* BroadcastConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 744BED112FBCDA2000B0BF29 /* BroadcastConstants.swift */; };
+		744BED222FBCDA2000B0BF29 /* BroadcastRecordingHandoff.swift in Sources */ = {isa = PBXBuildFile; fileRef = 744BED122FBCDA2000B0BF29 /* BroadcastRecordingHandoff.swift */; };
+		744BED232FBCDA2000B0BF29 /* ScreenRecordingWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 744BED133FBCDA2000B0BF29 /* ScreenRecordingWriter.swift */; };
+		744BED242FBCDA2000B0BF29 /* BroadcastUploadExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 744BED002FBCDA2000B0BF29 /* BroadcastUploadExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		744BED252FBCDA2000B0BF29 /* BroadcastPixelBufferConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 744BED162FBCDA2000B0BF29 /* BroadcastPixelBufferConverter.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		744BED062FBCDA2000B0BF29 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 744BECB52FBCDA1600B0BF29 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 744BED032FBCDA2000B0BF29;
+			remoteInfo = BroadcastUploadExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		744BED042FBCDA2000B0BF29 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				744BED242FBCDA2000B0BF29 /* BroadcastUploadExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		744BECBD2FBCDA1600B0BF29 /* iamge-detection.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "iamge-detection.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		744BED002FBCDA2000B0BF29 /* BroadcastUploadExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = BroadcastUploadExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		744BED102FBCDA2000B0BF29 /* SampleHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleHandler.swift; sourceTree = "<group>"; };
+		744BED112FBCDA2000B0BF29 /* BroadcastConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BroadcastConstants.swift; sourceTree = "<group>"; };
+		744BED122FBCDA2000B0BF29 /* BroadcastRecordingHandoff.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BroadcastRecordingHandoff.swift; sourceTree = "<group>"; };
+		744BED133FBCDA2000B0BF29 /* ScreenRecordingWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenRecordingWriter.swift; sourceTree = "<group>"; };
+		744BED143FBCDA2000B0BF29 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		744BED153FBCDA2000B0BF29 /* BroadcastUploadExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BroadcastUploadExtension.entitlements; sourceTree = "<group>"; };
+		744BED162FBCDA2000B0BF29 /* BroadcastPixelBufferConverter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BroadcastPixelBufferConverter.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -26,6 +67,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		744BED312FBCDA2000B0BF29 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -33,6 +81,8 @@
 			isa = PBXGroup;
 			children = (
 				744BECBF2FBCDA1600B0BF29 /* iamge-detection */,
+				744BED012FBCDA2000B0BF29 /* BroadcastUploadExtension */,
+				744BED022FBCDA2000B0BF29 /* SharedForExtension */,
 				744BECBE2FBCDA1600B0BF29 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -41,8 +91,31 @@
 			isa = PBXGroup;
 			children = (
 				744BECBD2FBCDA1600B0BF29 /* iamge-detection.app */,
+				744BED002FBCDA2000B0BF29 /* BroadcastUploadExtension.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		744BED012FBCDA2000B0BF29 /* BroadcastUploadExtension */ = {
+			isa = PBXGroup;
+			children = (
+				744BED102FBCDA2000B0BF29 /* SampleHandler.swift */,
+				744BED143FBCDA2000B0BF29 /* Info.plist */,
+				744BED153FBCDA2000B0BF29 /* BroadcastUploadExtension.entitlements */,
+			);
+			path = BroadcastUploadExtension;
+			sourceTree = "<group>";
+		};
+		744BED022FBCDA2000B0BF29 /* SharedForExtension */ = {
+			isa = PBXGroup;
+			children = (
+				744BED112FBCDA2000B0BF29 /* BroadcastConstants.swift */,
+				744BED122FBCDA2000B0BF29 /* BroadcastRecordingHandoff.swift */,
+				744BED133FBCDA2000B0BF29 /* ScreenRecordingWriter.swift */,
+				744BED162FBCDA2000B0BF29 /* BroadcastPixelBufferConverter.swift */,
+			);
+			name = SharedForExtension;
+			path = "iamge-detection/Shared";
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -55,10 +128,12 @@
 				744BECB92FBCDA1600B0BF29 /* Sources */,
 				744BECBA2FBCDA1600B0BF29 /* Frameworks */,
 				744BECBB2FBCDA1600B0BF29 /* Resources */,
+				744BED042FBCDA2000B0BF29 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				744BED052FBCDA2000B0BF29 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				744BECBF2FBCDA1600B0BF29 /* iamge-detection */,
@@ -69,6 +144,23 @@
 			productName = "iamge-detection";
 			productReference = 744BECBD2FBCDA1600B0BF29 /* iamge-detection.app */;
 			productType = "com.apple.product-type.application";
+		};
+		744BED032FBCDA2000B0BF29 /* BroadcastUploadExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 744BED422FBCDA2000B0BF29 /* Build configuration list for PBXNativeTarget "BroadcastUploadExtension" */;
+			buildPhases = (
+				744BED302FBCDA2000B0BF29 /* Sources */,
+				744BED312FBCDA2000B0BF29 /* Frameworks */,
+				744BED322FBCDA2000B0BF29 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = BroadcastUploadExtension;
+			productName = BroadcastUploadExtension;
+			productReference = 744BED002FBCDA2000B0BF29 /* BroadcastUploadExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -81,6 +173,9 @@
 				LastUpgradeCheck = 2650;
 				TargetAttributes = {
 					744BECBC2FBCDA1600B0BF29 = {
+						CreatedOnToolsVersion = 26.5;
+					};
+					744BED032FBCDA2000B0BF29 = {
 						CreatedOnToolsVersion = 26.5;
 					};
 				};
@@ -100,12 +195,20 @@
 			projectRoot = "";
 			targets = (
 				744BECBC2FBCDA1600B0BF29 /* iamge-detection */,
+				744BED032FBCDA2000B0BF29 /* BroadcastUploadExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		744BECBB2FBCDA1600B0BF29 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		744BED322FBCDA2000B0BF29 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -122,7 +225,27 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		744BED302FBCDA2000B0BF29 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				744BED202FBCDA2000B0BF29 /* SampleHandler.swift in Sources */,
+				744BED212FBCDA2000B0BF29 /* BroadcastConstants.swift in Sources */,
+				744BED222FBCDA2000B0BF29 /* BroadcastRecordingHandoff.swift in Sources */,
+				744BED232FBCDA2000B0BF29 /* ScreenRecordingWriter.swift in Sources */,
+				744BED252FBCDA2000B0BF29 /* BroadcastPixelBufferConverter.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		744BED052FBCDA2000B0BF29 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 744BED032FBCDA2000B0BF29 /* BroadcastUploadExtension */;
+			targetProxy = 744BED062FBCDA2000B0BF29 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		744BECC62FBCDA1700B0BF29 /* Debug */ = {
@@ -177,7 +300,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
@@ -234,7 +357,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
@@ -249,10 +372,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "iamge-detection/iamge-detection.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				ENABLE_PREVIEWS = YES;
+				DEVELOPMENT_TEAM = 35SGY39Y8Z;
+				ENABLE_PREVIEWS = NO;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Select photos to classify with MobileCLIP.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -267,7 +393,6 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
@@ -280,10 +405,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "iamge-detection/iamge-detection.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				ENABLE_PREVIEWS = YES;
+				DEVELOPMENT_TEAM = 35SGY39Y8Z;
+				ENABLE_PREVIEWS = NO;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Select photos to classify with MobileCLIP.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -298,7 +426,62 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		744BED402FBCDA2000B0BF29 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = BroadcastUploadExtension/BroadcastUploadExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 35SGY39Y8Z;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = BroadcastUploadExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Screen Recorder";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.abui.iamge-detection.BroadcastUploadExtension";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		744BED412FBCDA2000B0BF29 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = BroadcastUploadExtension/BroadcastUploadExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 35SGY39Y8Z;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = BroadcastUploadExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Screen Recorder";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.abui.iamge-detection.BroadcastUploadExtension";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
@@ -323,6 +506,15 @@
 			buildConfigurations = (
 				744BECC92FBCDA1700B0BF29 /* Debug */,
 				744BECCA2FBCDA1700B0BF29 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		744BED422FBCDA2000B0BF29 /* Build configuration list for PBXNativeTarget "BroadcastUploadExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				744BED402FBCDA2000B0BF29 /* Debug */,
+				744BED412FBCDA2000B0BF29 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

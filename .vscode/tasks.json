@@ -1,0 +1,23 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "SweetPad: Build & Launch (iPhone 17)",
+      "type": "sweetpad",
+      "action": "launch",
+      "scheme": "iamge-detection",
+      "configuration": "Debug",
+      "destination": "platform=iOS Simulator,name=iPhone 17,OS=26.5",
+      "problemMatcher": []
+    },
+    {
+      "label": "SweetPad: Build (iPhone 17)",
+      "type": "sweetpad",
+      "action": "build",
+      "scheme": "iamge-detection",
+      "configuration": "Debug",
+      "destination": "platform=iOS Simulator,name=iPhone 17,OS=26.5",
+      "problemMatcher": []
+    }
+  ]
+}
