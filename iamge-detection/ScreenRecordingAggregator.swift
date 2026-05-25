@@ -19,6 +19,8 @@ struct FrameClassificationSummary: Identifiable {
     let audioTranscript: String?
     let audioTone: String?
     let audioLabel: String?
+    let contentSummary: String?
+    let creatorHandle: String?
 }
 
 enum ScreenRecordingAggregator {
@@ -133,7 +135,9 @@ enum ScreenRecordingAggregator {
             audioTone: String?,
             audioLabel: String?,
             videoMatchedPrompt: String?,
-            audioMatchedPrompt: String?
+            audioMatchedPrompt: String?,
+            contentSummary: String?,
+            creatorHandle: String?
         )],
         fps: Float
     ) -> [FrameClassificationSummary] {
@@ -153,7 +157,9 @@ enum ScreenRecordingAggregator {
                 bottomCropThumbnail: frame.bottomCropThumbnail,
                 audioTranscript: frame.audioTranscript,
                 audioTone: frame.audioTone,
-                audioLabel: frame.audioLabel
+                audioLabel: frame.audioLabel,
+                contentSummary: frame.contentSummary,
+                creatorHandle: frame.creatorHandle
             )
         }
 
@@ -184,8 +190,20 @@ enum ScreenRecordingAggregator {
                 bottomCropThumbnail: matching.first?.bottomCropThumbnail ?? bucket.first?.bottomCropThumbnail,
                 audioTranscript: matching.first?.audioTranscript ?? bucket.first?.audioTranscript,
                 audioTone: matching.first?.audioTone ?? bucket.first?.audioTone,
-                audioLabel: matching.first?.audioLabel ?? bucket.first?.audioLabel
+                audioLabel: matching.first?.audioLabel ?? bucket.first?.audioLabel,
+                contentSummary: ScreenContentSummaryBuilder.mergeSegmentSummaries(
+                    bucket.compactMap(\.contentSummary)
+                ),
+                creatorHandle: preferredCreatorHandle(in: bucket)
             )
         }
+    }
+
+    private static func preferredCreatorHandle(in bucket: [FrameClassificationSummary]) -> String? {
+        let handles = bucket.compactMap(\.creatorHandle)
+        guard !handles.isEmpty else { return nil }
+
+        let counts = Dictionary(handles.map { ($0, 1) }, uniquingKeysWith: +)
+        return counts.max { $0.value < $1.value }?.key
     }
 }

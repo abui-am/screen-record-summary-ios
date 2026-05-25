@@ -28,6 +28,7 @@ enum RecordingProcessingPhase: Equatable {
     case loadingWhisper
     case processingAudio
     case processingVideo
+    case summarizingWithAppleIntelligence
 }
 
 @MainActor
@@ -51,6 +52,10 @@ final class ImageClassifierViewModel {
     var totalFramesExpected = 0
     var framesProcessed = 0
     var frameTimeline: [FrameClassificationSummary] = []
+    var recordingContentSummary: String?
+    var recordingAISummary: String?
+    var foundationSummaryStatus: String?
+    var detectedCreators: [String] = []
     var temporaryFramePreview: UIImage?
     var temporaryFrameTimestamp: TimeInterval = 0
     var lastInferenceMilliseconds: Double = 0
@@ -71,6 +76,10 @@ final class ImageClassifierViewModel {
     private var whisperTranscriber: ScreenRecordingWhisperTranscriber?
     private let broadcastController = BroadcastRecordingController.shared
     private var screenRecordingTask: Task<Void, Never>?
+
+    var displayedRecordingSummary: String? {
+        recordingAISummary ?? recordingContentSummary
+    }
 
     var savedRecordingName: String? {
         savedRecordingURL?.lastPathComponent
@@ -197,6 +206,10 @@ final class ImageClassifierViewModel {
         promptMatches = []
         framesProcessed = 0
         frameTimeline = []
+        recordingContentSummary = nil
+        recordingAISummary = nil
+        foundationSummaryStatus = nil
+        detectedCreators = []
         temporaryFramePreview = nil
         temporaryFrameTimestamp = 0
         totalFramesExpected = 0
@@ -328,6 +341,10 @@ final class ImageClassifierViewModel {
         promptMatches = []
         framesProcessed = 0
         frameTimeline = []
+        recordingContentSummary = nil
+        recordingAISummary = nil
+        foundationSummaryStatus = nil
+        detectedCreators = []
         temporaryFramePreview = nil
         temporaryFrameTimestamp = 0
         totalFramesExpected = 0
@@ -390,7 +407,9 @@ final class ImageClassifierViewModel {
                 audioTone: String?,
                 audioLabel: String?,
                 videoMatchedPrompt: String?,
-                audioMatchedPrompt: String?
+                audioMatchedPrompt: String?,
+                contentSummary: String?,
+                creatorHandle: String?
             )] = []
             var lastPreview: UIImage?
 
@@ -486,6 +505,17 @@ final class ImageClassifierViewModel {
                 let previews = ImagePreprocessor.modelInputPreviews(from: frame.pixelBuffer)
                 let preview = ImagePreprocessor.uiImage(from: frame.pixelBuffer)
                 lastPreview = preview
+
+                let visionAnalysis = VisionFrameContentAnalyzer.analyze(pixelBuffer: frame.pixelBuffer)
+                let handleResult = CreatorHandleExtractor.extract(from: frame.pixelBuffer)
+                let contentSummary = ScreenContentSummaryBuilder.segmentSummary(
+                    label: mergedMatches.first?.label ?? "",
+                    onScreenText: visionAnalysis.onScreenText,
+                    sceneHints: visionAnalysis.sceneHints,
+                    transcript: audioInfo?.transcript,
+                    audioTone: audioInfo?.tone
+                )
+
                 timedFrames.append((
                     timestamp: frame.timestamp,
                     matches: mergedMatches,
@@ -495,7 +525,9 @@ final class ImageClassifierViewModel {
                     audioTone: audioInfo?.tone,
                     audioLabel: audioInfo?.matches.first?.label,
                     videoMatchedPrompt: videoResult.categories.first?.matchedPrompt,
-                    audioMatchedPrompt: audioInfo?.matches.first?.matchedPrompt
+                    audioMatchedPrompt: audioInfo?.matches.first?.matchedPrompt,
+                    contentSummary: contentSummary,
+                    creatorHandle: handleResult.handle
                 ))
                 await updateProgress(classifiedCount, frame.timestamp, preview)
             }
@@ -516,6 +548,26 @@ final class ImageClassifierViewModel {
             frames: processed.1,
             fps: metadata.fps
         )
+        detectedCreators = Self.aggregateCreators(from: frameTimeline)
+        recordingContentSummary = ScreenContentSummaryBuilder.recordingSummary(
+            from: frameTimeline.compactMap(\.contentSummary)
+        )
+
+        recordingProcessingPhase = .summarizingWithAppleIntelligence
+        foundationSummaryStatus = RecordingFoundationSummarizer.availability().statusMessage
+
+        if RecordingFoundationSummarizer.availability() == .available {
+            do {
+                recordingAISummary = try await RecordingFoundationSummarizer.summarizeRecording(
+                    timeline: frameTimeline,
+                    overallCategory: matches.first?.label
+                )
+                foundationSummaryStatus = nil
+            } catch {
+                foundationSummaryStatus = error.localizedDescription
+            }
+        }
+
         recordingProcessingPhase = .idle
     }
 
@@ -564,5 +616,18 @@ final class ImageClassifierViewModel {
             return 0
         }
         return size.int64Value
+    }
+
+    private static func aggregateCreators(from timeline: [FrameClassificationSummary]) -> [String] {
+        let handles = timeline.compactMap(\.creatorHandle)
+        guard !handles.isEmpty else { return [] }
+
+        let counts = Dictionary(handles.map { ($0, 1) }, uniquingKeysWith: +)
+        return counts.sorted { lhs, rhs in
+            if lhs.value != rhs.value {
+                return lhs.value > rhs.value
+            }
+            return lhs.key.localizedCaseInsensitiveCompare(rhs.key) == .orderedAscending
+        }.map(\.key)
     }
 }

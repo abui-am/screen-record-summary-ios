@@ -47,6 +47,35 @@ enum ImagePreprocessor {
         return UIImage(cgImage: cgImage)
     }
 
+    /// Left-bottom overlay zone for TikTok/Reels handle OCR at native resolution.
+    static func overlayCrop(from source: CVPixelBuffer) -> CVPixelBuffer? {
+        let ciImage = CIImage(cvPixelBuffer: source)
+        let cropped = overlayCrop(from: ciImage)
+        let extent = cropped.extent.integral
+        guard extent.width >= 32, extent.height >= 32 else { return nil }
+        return pixelBuffer(
+            from: cropped,
+            width: Int(extent.width.rounded(.down)),
+            height: Int(extent.height.rounded(.down))
+        )
+    }
+
+    static func overlayCrop(from image: CIImage) -> CIImage {
+        let extent = image.extent.integral
+        guard extent.width > 0, extent.height > 0 else { return image }
+
+        let aspect = extent.height / extent.width
+        let cropWidth = aspect >= screenshotAspectThreshold ? extent.width * 0.65 : extent.width
+        let cropHeight = extent.height * 0.40
+        let cropRect = CGRect(
+            x: extent.minX,
+            y: extent.minY,
+            width: cropWidth,
+            height: cropHeight
+        )
+        return image.cropped(to: cropRect)
+    }
+
     private static func modelInputBuffers(from image: CIImage, size: Int) -> [CVPixelBuffer]? {
         let extent = image.extent.integral
         guard extent.width > 0, extent.height > 0 else { return nil }

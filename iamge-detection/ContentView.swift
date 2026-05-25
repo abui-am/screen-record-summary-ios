@@ -72,6 +72,18 @@ struct ContentView: View {
                     if !viewModel.frameTimeline.isEmpty {
                         timelineSection
                     }
+
+                    if !viewModel.detectedCreators.isEmpty {
+                        creatorsSection(viewModel.detectedCreators)
+                    }
+
+                    if let recordingSummary = viewModel.displayedRecordingSummary {
+                        recordingSummarySection(
+                            recordingSummary,
+                            isAISummary: viewModel.recordingAISummary != nil,
+                            statusMessage: viewModel.foundationSummaryStatus
+                        )
+                    }
                 }
                 .padding()
             }
@@ -114,6 +126,8 @@ struct ContentView: View {
                 return "Transcribing and scoring audio…"
             case .processingVideo:
                 return "Classifying video frames with MobileCLIP…"
+            case .summarizingWithAppleIntelligence:
+                return "Summarizing with Apple Intelligence…"
             case .idle:
                 return "Processing saved recording…"
             }
@@ -407,6 +421,8 @@ struct ContentView: View {
                 return "Video \(viewModel.framesProcessed)/\(viewModel.totalFramesExpected)"
             }
             return "Classifying video…"
+        case .summarizingWithAppleIntelligence:
+            return "Summarizing…"
         case .idle:
             return "Processing saved recording…"
         }
@@ -444,7 +460,7 @@ struct ContentView: View {
 
     private var timelineSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Per-frame timeline")
+            Text("Per-segment timeline")
                 .font(.headline)
 
             ForEach(viewModel.frameTimeline) { entry in
@@ -467,6 +483,17 @@ struct ContentView: View {
                                 .foregroundStyle(.secondary)
                             Text(entry.label)
                                 .font(.caption.bold())
+                        }
+                        if let handle = entry.creatorHandle {
+                            Label(handle, systemImage: "person.crop.circle")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        if let summary = entry.contentSummary, !summary.isEmpty {
+                            Label(summary, systemImage: "text.viewfinder")
+                                .font(.caption2)
+                                .foregroundStyle(.primary)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                         if let videoPrompt = entry.videoMatchedPrompt {
                             Text("Video: \(videoPrompt)")
@@ -511,6 +538,50 @@ struct ContentView: View {
                 }
             }
         }
+    }
+
+    private func creatorsSection(_ creators: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Creators seen")
+                .font(.headline)
+            Text(creators.joined(separator: ", "))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private func recordingSummarySection(
+        _ summary: String,
+        isAISummary: Bool,
+        statusMessage: String?
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Text("Content viewed")
+                    .font(.headline)
+                if isAISummary {
+                    Label("Apple Intelligence", systemImage: "sparkles")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Text(summary)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if let statusMessage {
+                Text(statusMessage)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
     }
 
     private func configurePlaybackAudioSession() {
