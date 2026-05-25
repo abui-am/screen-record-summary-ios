@@ -1,4 +1,1 @@
-iamge-detection/mobileclip2_s3_image.mlpackage
-iamge-detection/mobileclip2_s3_text.mlpackage
-iamge-detection/Resources/clip-vocab.json
-iamge-detection/Resources/clip-merges.txt
+iamge-detection/Resources/clip-model/

@@ -82,11 +82,16 @@ class CLIPTokenizer {
         self.decoder = Utils.invert(self.encoder)
     }
 
+    private static let clipModelSubdirectory = "Resources/clip-model"
+
     private static func resourceURL(name: String, extension ext: String) -> URL? {
-        if let url = Bundle.main.url(forResource: name, withExtension: ext) {
+        if let url = Bundle.main.url(forResource: name, withExtension: ext, subdirectory: clipModelSubdirectory) {
             return url
         }
-        return Bundle.main.url(forResource: name, withExtension: ext, subdirectory: "Resources")
+        if let url = Bundle.main.url(forResource: name, withExtension: ext, subdirectory: "Resources") {
+            return url
+        }
+        return Bundle.main.url(forResource: name, withExtension: ext)
     }
 
     func byteEncode(text: String) -> [String] {
