@@ -13,6 +13,7 @@
 		744BED232FBCDA2000B0BF29 /* ScreenRecordingWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 744BED133FBCDA2000B0BF29 /* ScreenRecordingWriter.swift */; };
 		744BED242FBCDA2000B0BF29 /* BroadcastUploadExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 744BED002FBCDA2000B0BF29 /* BroadcastUploadExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		744BED252FBCDA2000B0BF29 /* BroadcastPixelBufferConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 744BED162FBCDA2000B0BF29 /* BroadcastPixelBufferConverter.swift */; };
+		74EF9D682FBE293300B95AA8 /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = 744BED512FBCDA3000B0BF29 /* WhisperKit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -64,6 +65,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				74EF9D682FBE293300B95AA8 /* WhisperKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -140,6 +142,7 @@
 			);
 			name = "iamge-detection";
 			packageProductDependencies = (
+				744BED512FBCDA3000B0BF29 /* WhisperKit */,
 			);
 			productName = "iamge-detection";
 			productReference = 744BECBD2FBCDA1600B0BF29 /* iamge-detection.app */;
@@ -189,6 +192,9 @@
 			);
 			mainGroup = 744BECB42FBCDA1600B0BF29;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				744BED502FBCDA3000B0BF29 /* XCRemoteSwiftPackageReference "argmax-oss-swift" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 744BECBE2FBCDA1600B0BF29 /* Products */;
 			projectDirPath = "";
@@ -520,6 +526,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		744BED502FBCDA3000B0BF29 /* XCRemoteSwiftPackageReference "argmax-oss-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/argmaxinc/argmax-oss-swift.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.9.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		744BED512FBCDA3000B0BF29 /* WhisperKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 744BED502FBCDA3000B0BF29 /* XCRemoteSwiftPackageReference "argmax-oss-swift" */;
+			productName = WhisperKit;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 744BECB52FBCDA1600B0BF29 /* Project object */;
 }

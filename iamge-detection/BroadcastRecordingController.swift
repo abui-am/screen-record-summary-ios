@@ -43,7 +43,13 @@ final class BroadcastRecordingController {
     private var captureObserver: NSObjectProtocol?
 
     var isBroadcasting: Bool {
-        BroadcastRecordingHandoff.isBroadcastActive || UIScreen.main.isCaptured
+        syncBroadcastStateWithSystem()
+        return UIScreen.main.isCaptured
+    }
+
+    /// Clears persisted broadcast flags when iOS reports capture is off.
+    func syncBroadcastStateWithSystem() {
+        BroadcastRecordingHandoff.syncBroadcastActive(isSystemCaptured: UIScreen.main.isCaptured)
     }
 
     private init() {}
@@ -64,8 +70,9 @@ final class BroadcastRecordingController {
     ) {
         endObservingBroadcastState()
         onCaptureEndedHandler = onCaptureEnded
+        syncBroadcastStateWithSystem()
 
-        var wasCaptured = UIScreen.main.isCaptured || BroadcastRecordingHandoff.isBroadcastActive
+        var wasCaptured = UIScreen.main.isCaptured
 
         captureObserver = NotificationCenter.default.addObserver(
             forName: UIScreen.capturedDidChangeNotification,
@@ -74,8 +81,9 @@ final class BroadcastRecordingController {
         ) { [weak self] _ in
             Task { @MainActor in
                 guard let self else { return }
+                self.syncBroadcastStateWithSystem()
 
-                let isCaptured = UIScreen.main.isCaptured || BroadcastRecordingHandoff.isBroadcastActive
+                let isCaptured = UIScreen.main.isCaptured
                 if isCaptured, !wasCaptured {
                     wasCaptured = true
                     onStarted()

@@ -35,6 +35,13 @@ enum BroadcastRecordingHandoff {
         defaults?.set(active, forKey: BroadcastConstants.broadcastActiveKey)
     }
 
+    /// Drop stale extension state when iOS reports screen capture is off.
+    static func syncBroadcastActive(isSystemCaptured: Bool) {
+        if !isSystemCaptured {
+            setBroadcastActive(false)
+        }
+    }
+
     static var isBroadcastActive: Bool {
         defaults?.bool(forKey: BroadcastConstants.broadcastActiveKey) ?? false
     }

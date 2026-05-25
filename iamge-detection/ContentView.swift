@@ -3,12 +3,15 @@
 //  iamge-detection
 //
 
+import AVFoundation
+import AVKit
 import PhotosUI
 import SwiftUI
 
 struct ContentView: View {
     @State private var viewModel = ImageClassifierViewModel()
     @State private var selectedItem: PhotosPickerItem?
+    @State private var recordingPlayer: AVPlayer?
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -17,8 +20,14 @@ struct ContentView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     header
 
-                    if !viewModel.modelReady {
+                    if !viewModel.modelReady || (viewModel.isLoading && !viewModel.isProcessingRecording) {
                         modelLoadPrompt
+                    }
+
+                    if let whisperError = viewModel.whisperLoadError, viewModel.modelReady {
+                        Text("Whisper unavailable: \(whisperError)")
+                            .foregroundStyle(.orange)
+                            .font(.callout)
                     }
 
                     inputModePicker
@@ -41,8 +50,8 @@ struct ContentView: View {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(loadingMessage)
                                     .foregroundStyle(.secondary)
-                                if viewModel.isProcessingRecording, viewModel.totalFramesExpected > 0 {
-                                    Text("\(viewModel.framesProcessed)/\(viewModel.totalFramesExpected) frames")
+                                if let detail = processingProgressDetail {
+                                    Text(detail)
                                         .font(.caption.monospacedDigit())
                                         .foregroundStyle(.secondary)
                                 }
@@ -68,7 +77,7 @@ struct ContentView: View {
             }
             .navigationTitle("Content Classifier")
             .task {
-                await viewModel.loadModelIfNeeded()
+                await viewModel.loadStartupModelsIfNeeded()
             }
             .onChange(of: selectedItem) { _, newValue in
                 viewModel.handlePhotoSelection(newValue)
@@ -81,17 +90,56 @@ struct ContentView: View {
                     viewModel.handleAppBecameActive()
                 }
             }
+            .onChange(of: viewModel.savedRecordingURL) { _, newURL in
+                if let newURL {
+                    configurePlaybackAudioSession()
+                    let player = AVPlayer(url: newURL)
+                    player.isMuted = false
+                    recordingPlayer = player
+                } else {
+                    recordingPlayer = nil
+                }
+            }
         }
     }
 
     private var loadingMessage: String {
         if viewModel.isProcessingRecording {
-            return "Processing saved recording with MobileCLIP…"
+            switch viewModel.recordingProcessingPhase {
+            case .preparingAudio:
+                return "Extracting audio from recording…"
+            case .loadingWhisper:
+                return "Loading Whisper for transcription…"
+            case .processingAudio:
+                return "Transcribing and scoring audio…"
+            case .processingVideo:
+                return "Classifying video frames with MobileCLIP…"
+            case .idle:
+                return "Processing saved recording…"
+            }
         }
         if viewModel.inputMode == .screenCapture, viewModel.isScreenRecording {
             return "System screen recording is active…"
         }
-        return viewModel.modelReady ? "Running MobileCLIP…" : "Loading models…"
+        return viewModel.modelReady ? "Running MobileCLIP…" : "Loading MobileCLIP and Whisper…"
+    }
+
+    private var processingProgressDetail: String? {
+        guard viewModel.isProcessingRecording else { return nil }
+
+        switch viewModel.recordingProcessingPhase {
+        case .processingAudio where viewModel.totalAudioSegmentsExpected > 0:
+            return "\(viewModel.audioSegmentsProcessed)/\(viewModel.totalAudioSegmentsExpected) audio windows"
+        case .processingVideo where viewModel.totalFramesExpected > 0:
+            return "\(viewModel.framesProcessed)/\(viewModel.totalFramesExpected) video frames"
+        case .preparingAudio, .loadingWhisper:
+            if let size = viewModel.savedRecordingSizeText {
+                return "Recording size: \(size)"
+            }
+            return nil
+        default:
+            return nil
+        }
     }
 
     private var header: some View {
@@ -110,21 +158,40 @@ struct ContentView: View {
                 HStack(spacing: 12) {
                     ProgressView()
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Loading MobileCLIP models…")
+                        Text("Loading models…")
                             .font(.subheadline.bold())
-                        Text("First launch on device can take 1–2 minutes while Core ML compiles.")
+                        Text("MobileCLIP compiles on first launch (1–2 min). Whisper base may download (~150 MB) the first time.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                        if viewModel.modelReady {
+                            Label("MobileCLIP ready", systemImage: "checkmark.circle.fill")
+                                .font(.caption)
+                                .foregroundStyle(.green)
+                        }
+                        if viewModel.whisperReady {
+                            Label("Whisper ready", systemImage: "checkmark.circle.fill")
+                                .font(.caption)
+                                .foregroundStyle(.green)
+                        } else if viewModel.isLoading {
+                            Label("Loading Whisper…", systemImage: "arrow.down.circle")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
             } else {
                 Text("Models are not loaded yet.")
                     .font(.subheadline.bold())
-                Text("Models load automatically when the app opens.")
+                Text("MobileCLIP and Whisper load automatically when the app opens.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                if let whisperError = viewModel.whisperLoadError {
+                    Text(whisperError)
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
                 Button("Load Models") {
-                    Task { await viewModel.loadModelIfNeeded() }
+                    Task { await viewModel.loadStartupModelsIfNeeded() }
                 }
                 .buttonStyle(.borderedProminent)
             }
@@ -158,7 +225,7 @@ struct ContentView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Screen sample · \(formatTimestamp(viewModel.temporaryFrameTimestamp))")
                             .font(.caption.bold())
-                        Text("1 FPS preview · frame \(viewModel.framesProcessed)/\(max(viewModel.totalFramesExpected, 1))")
+                        Text("Preview · frame \(viewModel.framesProcessed)/\(max(viewModel.totalFramesExpected, 1)) · every \(BroadcastConstants.classificationIntervalSeconds)s")
                             .font(.caption2)
                     }
                     .foregroundStyle(.white)
@@ -201,20 +268,26 @@ struct ContentView: View {
 
     private var previewPlaceholderDescription: String {
         if viewModel.inputMode == .screenCapture {
-            return "Start a system screen recording, stop it, then the saved video is classified at 1 frame per second."
+            return "Start a system screen recording, stop it, then the saved video is classified every \(BroadcastConstants.classificationIntervalSeconds) seconds."
         }
         return "Tap Add from Gallery to pick a photo."
     }
 
     private var labelsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Categories")
+            Text("Labels · \(viewModel.allPrompts.count) prompts")
                 .font(.subheadline.bold())
-            VStack(alignment: .leading, spacing: 6) {
-                ForEach(viewModel.classificationLabels, id: \.self) { label in
-                    Label(label, systemImage: "tag.fill")
-                        .font(.subheadline)
-                        .foregroundStyle(.primary)
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(viewModel.allPrompts, id: \.self) { label in
+                    Label {
+                        Text(label)
+                            .font(.caption)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } icon: {
+                        Image(systemName: "tag.fill")
+                            .font(.caption)
+                    }
+                    .foregroundStyle(.primary)
                 }
             }
             .padding(10)
@@ -296,10 +369,17 @@ struct ContentView: View {
                     .controlSize(.large)
                 }
             } else if viewModel.isProcessingRecording {
-                Label("Processing saved recording…", systemImage: "waveform.and.magnifyingglass")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                VStack(alignment: .leading, spacing: 8) {
+                    Label(processingPhaseLabel, systemImage: "waveform.and.magnifyingglass")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    if let size = viewModel.savedRecordingSizeText {
+                        Text("Recording size: \(size)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 BroadcastStartButton(viewModel: viewModel)
                     .disabled(!viewModel.modelReady)
@@ -311,11 +391,42 @@ struct ContentView: View {
         }
     }
 
+    private var processingPhaseLabel: String {
+        switch viewModel.recordingProcessingPhase {
+        case .preparingAudio:
+            return "Extracting audio…"
+        case .loadingWhisper:
+            return "Loading Whisper…"
+        case .processingAudio:
+            if viewModel.totalAudioSegmentsExpected > 0 {
+                return "Audio \(viewModel.audioSegmentsProcessed)/\(viewModel.totalAudioSegmentsExpected)"
+            }
+            return "Processing audio…"
+        case .processingVideo:
+            if viewModel.totalFramesExpected > 0 {
+                return "Video \(viewModel.framesProcessed)/\(viewModel.totalFramesExpected)"
+            }
+            return "Classifying video…"
+        case .idle:
+            return "Processing saved recording…"
+        }
+    }
+
     private var recordingStatus: some View {
         VStack(alignment: .leading, spacing: 8) {
             if let name = viewModel.savedRecordingName {
                 Label(name, systemImage: "film")
                     .font(.subheadline)
+            }
+            if let size = viewModel.savedRecordingSizeText {
+                Text("Recording size: \(size)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            if let recordingPlayer {
+                VideoPlayer(player: recordingPlayer)
+                    .frame(height: 180)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
             }
             if viewModel.recordingFPS > 0 {
                 Text(String(format: "%.0f FPS recording", viewModel.recordingFPS))
@@ -355,7 +466,41 @@ struct ContentView: View {
                                 .font(.caption.monospacedDigit())
                                 .foregroundStyle(.secondary)
                             Text(entry.label)
-                                .lineLimit(2)
+                                .font(.caption.bold())
+                        }
+                        if let videoPrompt = entry.videoMatchedPrompt {
+                            Text("Video: \(videoPrompt)")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        } else if let matchedPrompt = entry.matchedPrompt {
+                            Text(matchedPrompt)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        if let audioLabel = entry.audioLabel,
+                           let audioPrompt = entry.audioMatchedPrompt {
+                            Text("Audio (\(audioLabel)): \(audioPrompt)")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        if let tone = entry.audioTone, !tone.isEmpty {
+                            Label(tone, systemImage: "waveform.badge.magnifyingglass")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        if let transcript = entry.audioTranscript, !transcript.isEmpty {
+                            Label(transcript, systemImage: "text.quote")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        } else if entry.audioTone == nil, entry.audioLabel != nil {
+                            Text("No speech detected")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
                         }
                         Text(String(format: "%.1f%%", entry.probability * 100))
                             .font(.caption.monospacedDigit())
@@ -366,6 +511,12 @@ struct ContentView: View {
                 }
             }
         }
+    }
+
+    private func configurePlaybackAudioSession() {
+        let session = AVAudioSession.sharedInstance()
+        try? session.setCategory(.playback, mode: .default, options: [])
+        try? session.setActive(true)
     }
 
     private func formatTimestamp(_ timestamp: TimeInterval) -> String {
@@ -402,7 +553,13 @@ struct ContentView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Text(top.label)
-                        .font(.title2.bold())
+                        .font(.title3.bold())
+                    if let matchedPrompt = top.matchedPrompt {
+                        Text(matchedPrompt)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     Text(String(format: "cosine %.3f · %.1f%%", top.score, top.probability * 100))
                         .font(.subheadline.monospacedDigit())
                         .foregroundStyle(.secondary)
@@ -412,13 +569,21 @@ struct ContentView: View {
                 .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
             }
 
-            Text("All scores")
+            Text("Categories")
                 .font(.headline)
 
             ForEach(viewModel.matches) { match in
-                HStack(alignment: .firstTextBaseline) {
-                    Text(match.label)
-                        .lineLimit(2)
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(match.label)
+                            .font(.subheadline.bold())
+                        if let matchedPrompt = match.matchedPrompt {
+                            Text(matchedPrompt)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
                     Spacer(minLength: 8)
                     VStack(alignment: .trailing, spacing: 2) {
                         Text(String(format: "%.1f%%", match.probability * 100))
@@ -431,6 +596,26 @@ struct ContentView: View {
                     }
                 }
                 .padding(.vertical, 4)
+            }
+
+            if !viewModel.promptMatches.isEmpty {
+                Text("Top prompts")
+                    .font(.headline)
+                    .padding(.top, 4)
+
+                ForEach(viewModel.promptMatches.prefix(8)) { match in
+                    HStack(alignment: .top) {
+                        Text(match.label)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 8)
+                        Text(String(format: "%.1f%%", match.probability * 100))
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 2)
+                }
             }
         }
     }

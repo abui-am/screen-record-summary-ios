@@ -22,15 +22,26 @@ enum ClassificationInputMode: String, CaseIterable, Identifiable {
     }
 }
 
+enum RecordingProcessingPhase: Equatable {
+    case idle
+    case preparingAudio
+    case loadingWhisper
+    case processingAudio
+    case processingVideo
+}
+
 @MainActor
 @Observable
 final class ImageClassifierViewModel {
     var inputMode: ClassificationInputMode = .gallery
     var selectedImage: UIImage?
     var matches: [ClassificationMatch] = []
+    var promptMatches: [ClassificationMatch] = []
     var isLoading = false
     var errorMessage: String?
     var modelReady = false
+    var whisperReady = false
+    var whisperLoadError: String?
     var temperature: Float = 100
     var isScreenRecording = false
     var isProcessingRecording = false
@@ -43,17 +54,31 @@ final class ImageClassifierViewModel {
     var temporaryFramePreview: UIImage?
     var temporaryFrameTimestamp: TimeInterval = 0
     var lastInferenceMilliseconds: Double = 0
+    var recordingProcessingPhase: RecordingProcessingPhase = .idle
+    var totalAudioSegmentsExpected = 0
+    var audioSegmentsProcessed = 0
+    var savedRecordingByteCount: Int64 = 0
 
     var classificationLabels: [String] {
         MobileCLIPClassifier.labels
     }
 
+    var allPrompts: [String] {
+        MobileCLIPClassifier.allPrompts
+    }
+
     private var classifier: MobileCLIPClassifier?
+    private var whisperTranscriber: ScreenRecordingWhisperTranscriber?
     private let broadcastController = BroadcastRecordingController.shared
     private var screenRecordingTask: Task<Void, Never>?
 
     var savedRecordingName: String? {
         savedRecordingURL?.lastPathComponent
+    }
+
+    var savedRecordingSizeText: String? {
+        guard savedRecordingByteCount > 0 else { return nil }
+        return ByteCountFormatter.string(fromByteCount: savedRecordingByteCount, countStyle: .file)
     }
 
     init() {
@@ -63,11 +88,35 @@ final class ImageClassifierViewModel {
     }
 
     func loadModelIfNeeded() async {
-        guard classifier == nil else { return }
+        await loadStartupModelsIfNeeded()
+    }
+
+    func loadStartupModelsIfNeeded() async {
+        let needsCLIP = classifier == nil
+        let needsWhisper = whisperTranscriber == nil
+        guard needsCLIP || needsWhisper else { return }
         guard !isLoading else { return }
 
         isLoading = true
         errorMessage = nil
+        whisperLoadError = nil
+
+        await withTaskGroup(of: Void.self) { group in
+            if needsCLIP {
+                group.addTask { await self.loadCLIPModel() }
+            }
+            if needsWhisper {
+                group.addTask { await self.loadWhisperModel() }
+            }
+        }
+
+        if !isProcessingRecording {
+            isLoading = false
+        }
+    }
+
+    private func loadCLIPModel() async {
+        guard classifier == nil else { return }
 
         do {
             let loaded = try await Task.detached(priority: .userInitiated) {
@@ -78,9 +127,19 @@ final class ImageClassifierViewModel {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
 
-        if !isProcessingRecording {
-            isLoading = false
+    private func loadWhisperModel() async {
+        guard whisperTranscriber == nil else { return }
+
+        do {
+            let loaded = try await Task.detached(priority: .userInitiated) {
+                try await ScreenRecordingWhisperTranscriber()
+            }.value
+            whisperTranscriber = loaded
+            whisperReady = true
+        } catch {
+            whisperLoadError = error.localizedDescription
         }
     }
 
@@ -99,6 +158,7 @@ final class ImageClassifierViewModel {
         isLoading = true
         errorMessage = nil
         matches = []
+        promptMatches = []
 
         Task {
             do {
@@ -134,6 +194,7 @@ final class ImageClassifierViewModel {
 
         errorMessage = nil
         matches = []
+        promptMatches = []
         framesProcessed = 0
         frameTimeline = []
         temporaryFramePreview = nil
@@ -141,12 +202,12 @@ final class ImageClassifierViewModel {
         totalFramesExpected = 0
         recordingFPS = 0
         savedRecordingURL = nil
+        savedRecordingByteCount = 0
+        recordingProcessingPhase = .idle
+        totalAudioSegmentsExpected = 0
+        audioSegmentsProcessed = 0
         recordingStartedAt = Date()
         isScreenRecording = true
-
-        ScreenCaptureOverlayWindowController.shared.present(viewModel: self) { [weak self] in
-            self?.finishScreenRecording()
-        }
     }
 
     func finishScreenRecording() {
@@ -174,7 +235,6 @@ final class ImageClassifierViewModel {
     private func completeRecordingAfterBroadcast(shouldRequestStop: Bool) async {
         isScreenRecording = false
         recordingStartedAt = nil
-        ScreenCaptureOverlayWindowController.shared.dismiss()
         isProcessingRecording = true
         isLoading = true
         errorMessage = nil
@@ -205,11 +265,23 @@ final class ImageClassifierViewModel {
 
         isProcessingRecording = false
         isLoading = false
+        broadcastController.syncBroadcastStateWithSystem()
+        if !broadcastController.isBroadcasting {
+            isScreenRecording = false
+            recordingStartedAt = nil
+        }
     }
 
     func handleAppBecameActive() {
-        if broadcastController.isBroadcasting, !isScreenRecording {
-            handleBroadcastStarted()
+        broadcastController.syncBroadcastStateWithSystem()
+
+        if broadcastController.isBroadcasting {
+            if !isScreenRecording {
+                handleBroadcastStarted()
+            }
+        } else {
+            isScreenRecording = false
+            recordingStartedAt = nil
         }
 
         if BroadcastRecordingHandoff.isRecordingReady, !isProcessingRecording, !isScreenRecording {
@@ -228,7 +300,6 @@ final class ImageClassifierViewModel {
         screenRecordingTask = Task {
             isScreenRecording = false
             recordingStartedAt = nil
-            ScreenCaptureOverlayWindowController.shared.dismiss()
             await processPendingRecordingIfNeeded()
         }
     }
@@ -254,6 +325,7 @@ final class ImageClassifierViewModel {
 
     private func processSavedRecording(at recordingURL: URL) async throws {
         matches = []
+        promptMatches = []
         framesProcessed = 0
         frameTimeline = []
         temporaryFramePreview = nil
@@ -261,6 +333,10 @@ final class ImageClassifierViewModel {
         totalFramesExpected = 0
         recordingFPS = 0
         savedRecordingURL = recordingURL
+        savedRecordingByteCount = Self.fileSize(at: recordingURL)
+        recordingProcessingPhase = .preparingAudio
+        totalAudioSegmentsExpected = 0
+        audioSegmentsProcessed = 0
 
         try await ensureModelReady()
         guard let classifier else {
@@ -274,14 +350,32 @@ final class ImageClassifierViewModel {
         recordingFPS = metadata.fps
         totalFramesExpected = metadata.estimatedFrameCount
 
+        let hasAudio = await ScreenRecordingAudioExtractor.hasAudioTrack(in: recordingURL)
+
+        if hasAudio, whisperTranscriber == nil {
+            recordingProcessingPhase = .loadingWhisper
+            await loadWhisperModel()
+        }
+        let transcriberForProcessing = whisperTranscriber
+
         let updateProgress: @Sendable (Int, TimeInterval, UIImage?) async -> Void = { [weak self] count, timestamp, preview in
             await MainActor.run {
                 guard let self else { return }
+                self.recordingProcessingPhase = .processingVideo
                 self.framesProcessed = count
                 if let preview {
                     self.temporaryFramePreview = preview
                     self.temporaryFrameTimestamp = timestamp
                 }
+            }
+        }
+
+        let updateAudioProgress: @Sendable (RecordingProcessingPhase, Int, Int) async -> Void = { [weak self] phase, processed, total in
+            await MainActor.run {
+                guard let self else { return }
+                self.recordingProcessingPhase = phase
+                self.audioSegmentsProcessed = processed
+                self.totalAudioSegmentsExpected = total
             }
         }
 
@@ -291,28 +385,119 @@ final class ImageClassifierViewModel {
                 timestamp: TimeInterval,
                 matches: [ClassificationMatch],
                 thumbnail: UIImage?,
-                bottomCropThumbnail: UIImage?
+                bottomCropThumbnail: UIImage?,
+                audioTranscript: String?,
+                audioTone: String?,
+                audioLabel: String?,
+                videoMatchedPrompt: String?,
+                audioMatchedPrompt: String?
             )] = []
             var lastPreview: UIImage?
 
+            var classifiedCount = 0
+
+            var transcriber: ScreenRecordingWhisperTranscriber?
+            var audioSegments: [ScreenRecordingAudioSegment] = []
+            if hasAudio {
+                await updateAudioProgress(.preparingAudio, 0, 0)
+                audioSegments = try await ScreenRecordingAudioExtractor.exportClassificationWindows(from: recordingURL)
+                transcriber = transcriberForProcessing
+            }
+
+            var audioByTimestamp: [TimeInterval: (transcript: String, tone: String, matches: [ClassificationMatch])] = [:]
+            if let transcriber {
+                for (index, segment) in audioSegments.enumerated() {
+                    await updateAudioProgress(.processingAudio, index, audioSegments.count)
+                    let transcript: String
+                    if FileManager.default.fileExists(atPath: segment.wavURL.path) {
+                        transcript = (try? await transcriber.transcribe(wavURL: segment.wavURL)) ?? ""
+                    } else {
+                        transcript = ""
+                    }
+                    let tone = FileManager.default.fileExists(atPath: segment.wavURL.path)
+                        ? ScreenRecordingAudioToneAnalyzer.analyze(
+                            wavURL: segment.wavURL,
+                            transcript: transcript,
+                            durationSeconds: TimeInterval(BroadcastConstants.classificationIntervalSeconds)
+                        )
+                        : AudioToneAnalysis(
+                            description: "silent or unreadable audio",
+                            energy: "silent",
+                            character: "silent",
+                            pace: nil
+                        )
+                    let audioMatches = try classifier.classify(
+                        transcript: transcript,
+                        tone: tone.description,
+                        temperature: temp
+                    ).categories
+                    audioByTimestamp[segment.timestamp] = (transcript, tone.description, audioMatches)
+                    try? FileManager.default.removeItem(at: segment.wavURL)
+                    await updateAudioProgress(.processingAudio, index + 1, audioSegments.count)
+                }
+            } else if !audioSegments.isEmpty {
+                for (index, segment) in audioSegments.enumerated() {
+                    await updateAudioProgress(.processingAudio, index, audioSegments.count)
+                    guard FileManager.default.fileExists(atPath: segment.wavURL.path) else {
+                        await updateAudioProgress(.processingAudio, index + 1, audioSegments.count)
+                        continue
+                    }
+                    let tone = ScreenRecordingAudioToneAnalyzer.analyze(
+                        wavURL: segment.wavURL,
+                        durationSeconds: TimeInterval(BroadcastConstants.classificationIntervalSeconds)
+                    )
+                    let audioMatches = try classifier.classify(
+                        transcript: "",
+                        tone: tone.description,
+                        temperature: temp
+                    ).categories
+                    audioByTimestamp[segment.timestamp] = ("", tone.description, audioMatches)
+                    try? FileManager.default.removeItem(at: segment.wavURL)
+                    await updateAudioProgress(.processingAudio, index + 1, audioSegments.count)
+                }
+            }
+
+            await updateAudioProgress(.processingVideo, audioSegments.count, audioSegments.count)
+            if audioSegments.isEmpty {
+                await updateAudioProgress(.processingVideo, 0, 0)
+            }
+
             try await ScreenRecordingFrameExtractor.forEachFrame(from: recordingURL) { frame in
-                let results = try classifier.classify(
+                guard ScreenRecordingFrameExtractor.shouldClassify(at: frame.timestamp) else { return }
+
+                let videoResult = try classifier.classify(
                     pixelBuffer: frame.pixelBuffer,
-                    labels: labels,
                     temperature: temp
                 )
 
-                frameResults.append(results)
+                let roundedTimestamp = TimeInterval(Int(frame.timestamp.rounded(.down)))
+                let audioInfo = audioByTimestamp[roundedTimestamp]
+                let mergedMatches = ScreenRecordingAggregator.mergeVideoAndAudio(
+                    videoMatches: videoResult.categories,
+                    audioMatches: audioInfo?.matches,
+                    labels: labels,
+                    temperature: temp,
+                    transcript: audioInfo?.transcript,
+                    audioTone: audioInfo?.tone
+                )
+
+                classifiedCount += 1
+                frameResults.append(mergedMatches)
                 let previews = ImagePreprocessor.modelInputPreviews(from: frame.pixelBuffer)
                 let preview = ImagePreprocessor.uiImage(from: frame.pixelBuffer)
                 lastPreview = preview
                 timedFrames.append((
                     timestamp: frame.timestamp,
-                    matches: results,
+                    matches: mergedMatches,
                     thumbnail: preview,
-                    bottomCropThumbnail: previews.bottomCrop
+                    bottomCropThumbnail: previews.bottomCrop,
+                    audioTranscript: audioInfo?.transcript,
+                    audioTone: audioInfo?.tone,
+                    audioLabel: audioInfo?.matches.first?.label,
+                    videoMatchedPrompt: videoResult.categories.first?.matchedPrompt,
+                    audioMatchedPrompt: audioInfo?.matches.first?.matchedPrompt
                 ))
-                await updateProgress(frame.index + 1, frame.timestamp, preview)
+                await updateProgress(classifiedCount, frame.timestamp, preview)
             }
 
             return (frameResults, timedFrames, lastPreview)
@@ -331,17 +516,20 @@ final class ImageClassifierViewModel {
             frames: processed.1,
             fps: metadata.fps
         )
+        recordingProcessingPhase = .idle
     }
 
     func resetBroadcastUIState() {
         screenRecordingTask?.cancel()
         screenRecordingTask = nil
-        ScreenCaptureOverlayWindowController.shared.dismiss()
         isScreenRecording = false
         isProcessingRecording = false
         recordingStartedAt = nil
         temporaryFramePreview = nil
         temporaryFrameTimestamp = 0
+        recordingProcessingPhase = .idle
+        totalAudioSegmentsExpected = 0
+        audioSegmentsProcessed = 0
     }
 
     func handleInputModeChange(from oldMode: ClassificationInputMode, to newMode: ClassificationInputMode) {
@@ -358,15 +546,23 @@ final class ImageClassifierViewModel {
             throw ClassifierError.modelLoadFailed("Model is not loaded yet.")
         }
 
-        let labels = classificationLabels
         let temp = temperature
         let start = CACurrentMediaTime()
 
         let results = try await Task.detached {
-            try classifier.classify(image: image, labels: labels, temperature: temp)
+            try classifier.classify(image: image, temperature: temp)
         }.value
 
         lastInferenceMilliseconds = (CACurrentMediaTime() - start) * 1000
-        return results
+        promptMatches = results.prompts
+        return results.categories
+    }
+
+    private static func fileSize(at url: URL) -> Int64 {
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let size = attributes[.size] as? NSNumber else {
+            return 0
+        }
+        return size.int64Value
     }
 }

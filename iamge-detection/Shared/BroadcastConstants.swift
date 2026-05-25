@@ -12,6 +12,9 @@ enum BroadcastConstants {
     /// Frames written to the saved MP4 during broadcast (1 frame per second).
     static let targetRecordingFPS: Double = 1
 
+    /// Classify one saved frame every N seconds during post-processing.
+    static let classificationIntervalSeconds: Int = 3
+
     static let recordingReadyKey = "recordingReady"
     static let lastRecordingPathKey = "lastRecordingPath"
     static let recordingFinishedAtKey = "recordingFinishedAt"

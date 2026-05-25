@@ -15,7 +15,7 @@ struct ModelInputPreviews {
 enum ImagePreprocessor {
     private static let modelInputSize = 256
     private static let screenshotAspectThreshold: CGFloat = 1.6
-    static let screenshotBottomCropFraction: CGFloat = 0.45
+    static let screenshotBottomCropFraction: CGFloat = 0.50
     private static let renderContext = CIContext(options: [.useSoftwareRenderer: false])
 
     static func modelInputBuffers(from image: UIImage, size: Int = modelInputSize) -> [CVPixelBuffer]? {

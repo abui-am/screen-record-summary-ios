@@ -47,12 +47,23 @@ enum ScreenRecordingFrameExtractor {
         }
 
         let fps = Float(BroadcastConstants.targetRecordingFPS)
-        let estimatedFrameCount = max(1, Int(ceil(durationSeconds * BroadcastConstants.targetRecordingFPS)))
+        let estimatedFrameCount = Self.estimatedClassificationFrameCount(durationSeconds: durationSeconds)
         return ScreenRecordingMetadata(
             fps: fps,
             duration: durationSeconds,
             estimatedFrameCount: estimatedFrameCount
         )
+    }
+
+    static func estimatedClassificationFrameCount(durationSeconds: TimeInterval) -> Int {
+        let interval = max(1, BroadcastConstants.classificationIntervalSeconds)
+        return max(1, Int(floor(durationSeconds / Double(interval))) + 1)
+    }
+
+    static func shouldClassify(at timestamp: TimeInterval) -> Bool {
+        let interval = max(1, BroadcastConstants.classificationIntervalSeconds)
+        let second = Int(timestamp.rounded(.down))
+        return second % interval == 0
     }
 
     static func forEachFrame(

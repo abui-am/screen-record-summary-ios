@@ -9,7 +9,7 @@ import CoreVideo
 import Foundation
 
 enum ScreenRecordingWriterError: LocalizedError {
-    case cannotCreateWriter
+    case cannotCreateWriter(String)
     case cannotStartWriting
     case appendFailed
     case finishFailed
@@ -18,8 +18,11 @@ enum ScreenRecordingWriterError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .cannotCreateWriter:
-            return "Could not create the screen recording file."
+        case .cannotCreateWriter(let detail):
+            if detail.isEmpty {
+                return "Could not create the screen recording file."
+            }
+            return "Could not create the screen recording file. \(detail)"
         case .cannotStartWriting:
             return "Could not start writing the screen recording."
         case .appendFailed:
@@ -38,11 +41,18 @@ final class ScreenRecordingWriter {
     let outputURL: URL
     private var assetWriter: AVAssetWriter?
     private var videoInput: AVAssetWriterInput?
+    private var audioInput: AVAssetWriterInput?
     private var pixelBufferAdaptor: AVAssetWriterInputPixelBufferAdaptor?
     private var sessionStarted = false
+    private var sessionStartTime: CMTime?
     private var frameCount = 0
+    private var audioSampleCount = 0
     private var lastAcceptedPresentationTime: CMTime?
+    private var pendingAudioBuffers: [CMSampleBuffer] = []
+    private var preSessionVideoFrames = 0
     private let minFrameInterval = CMTime(value: 1, timescale: 1)
+    /// Wait briefly for app audio before starting the writer session video-only.
+    private let videoOnlySessionFrameThreshold = 2
 
     init(outputURL: URL) throws {
         self.outputURL = outputURL
@@ -50,10 +60,11 @@ final class ScreenRecordingWriter {
             try FileManager.default.removeItem(at: outputURL)
         }
 
-        guard let writer = try? AVAssetWriter(outputURL: outputURL, fileType: .mp4) else {
-            throw ScreenRecordingWriterError.cannotCreateWriter
+        do {
+            assetWriter = try AVAssetWriter(outputURL: outputURL, fileType: .mp4)
+        } catch {
+            throw ScreenRecordingWriterError.cannotCreateWriter(error.localizedDescription)
         }
-        assetWriter = writer
     }
 
     func append(sampleBuffer: CMSampleBuffer) throws {
@@ -71,7 +82,7 @@ final class ScreenRecordingWriter {
             throw ScreenRecordingWriterError.missingPixelBuffer
         }
 
-        try configureWriterIfNeeded(from: pixelBuffer)
+        try configureVideoInputIfNeeded(from: pixelBuffer)
 
         guard let assetWriter, let videoInput, let pixelBufferAdaptor else { return }
         if assetWriter.status == .failed {
@@ -79,12 +90,14 @@ final class ScreenRecordingWriter {
         }
 
         if !sessionStarted {
-            guard assetWriter.startWriting() else {
-                throw assetWriter.error ?? ScreenRecordingWriterError.cannotStartWriting
+            preSessionVideoFrames += 1
+            if audioInput == nil, preSessionVideoFrames < videoOnlySessionFrameThreshold {
+                return
             }
-            assetWriter.startSession(atSourceTime: presentationTime)
-            sessionStarted = true
         }
+
+        try startSessionIfNeeded(at: presentationTime)
+        try flushPendingAudioBuffers()
 
         var retries = 0
         while !videoInput.isReadyForMoreMediaData, retries < 200 {
@@ -104,11 +117,32 @@ final class ScreenRecordingWriter {
         frameCount += 1
     }
 
+    func appendAudio(sampleBuffer: CMSampleBuffer) throws {
+        guard CMSampleBufferIsValid(sampleBuffer) else { return }
+
+        let presentationTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+        try configureAudioInputIfNeeded(from: sampleBuffer)
+
+        guard assetWriter != nil else { return }
+
+        guard sessionStarted else {
+            if let copy = copySampleBuffer(sampleBuffer) {
+                pendingAudioBuffers.append(copy)
+            }
+            return
+        }
+
+        try appendAudioSampleBuffer(sampleBuffer, presentationTime: presentationTime)
+    }
+
     func finish() throws {
         guard frameCount > 0 else { return }
         guard let assetWriter, let videoInput else { return }
 
+        try flushPendingAudioBuffers()
+
         videoInput.markAsFinished()
+        audioInput?.markAsFinished()
 
         let group = DispatchGroup()
         group.enter()
@@ -122,9 +156,64 @@ final class ScreenRecordingWriter {
         }
     }
 
-    private func configureWriterIfNeeded(from pixelBuffer: CVPixelBuffer) throws {
+    private func startSessionIfNeeded(at presentationTime: CMTime) throws {
+        guard !sessionStarted else { return }
+        guard videoInput != nil else { return }
+        guard let assetWriter else { throw ScreenRecordingWriterError.cannotCreateWriter("") }
+
+        let startTime: CMTime
+        if let sessionStartTime {
+            startTime = CMTimeCompare(presentationTime, sessionStartTime) < 0 ? presentationTime : sessionStartTime
+        } else {
+            startTime = presentationTime
+        }
+        sessionStartTime = startTime
+
+        guard assetWriter.startWriting() else {
+            throw assetWriter.error ?? ScreenRecordingWriterError.cannotStartWriting
+        }
+        assetWriter.startSession(atSourceTime: startTime)
+        sessionStarted = true
+    }
+
+    private func flushPendingAudioBuffers() throws {
+        guard sessionStarted, !pendingAudioBuffers.isEmpty else { return }
+
+        let buffers = pendingAudioBuffers
+        pendingAudioBuffers.removeAll(keepingCapacity: true)
+
+        for sampleBuffer in buffers {
+            let presentationTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+            try appendAudioSampleBuffer(sampleBuffer, presentationTime: presentationTime)
+        }
+    }
+
+    private func appendAudioSampleBuffer(_ sampleBuffer: CMSampleBuffer, presentationTime: CMTime) throws {
+        guard let assetWriter, let audioInput else { return }
+        if assetWriter.status == .failed {
+            throw assetWriter.error ?? ScreenRecordingWriterError.appendFailed
+        }
+
+        var retries = 0
+        while !audioInput.isReadyForMoreMediaData, retries < 200 {
+            Thread.sleep(forTimeInterval: 0.005)
+            retries += 1
+        }
+
+        guard audioInput.isReadyForMoreMediaData else {
+            throw ScreenRecordingWriterError.appendFailed
+        }
+
+        guard audioInput.append(sampleBuffer) else {
+            throw assetWriter.error ?? ScreenRecordingWriterError.appendFailed
+        }
+
+        audioSampleCount += 1
+    }
+
+    private func configureVideoInputIfNeeded(from pixelBuffer: CVPixelBuffer) throws {
         guard videoInput == nil else { return }
-        guard let assetWriter else { throw ScreenRecordingWriterError.cannotCreateWriter }
+        guard let assetWriter else { throw ScreenRecordingWriterError.cannotCreateWriter("") }
 
         let width = CVPixelBufferGetWidth(pixelBuffer)
         let height = CVPixelBufferGetHeight(pixelBuffer)
@@ -155,11 +244,83 @@ final class ScreenRecordingWriter {
         )
 
         guard assetWriter.canAdd(input) else {
-            throw ScreenRecordingWriterError.cannotCreateWriter
+            let detail = assetWriter.error?.localizedDescription ?? "Could not add the video track."
+            throw ScreenRecordingWriterError.cannotCreateWriter(detail)
         }
 
         assetWriter.add(input)
         videoInput = input
         pixelBufferAdaptor = adaptor
+    }
+
+    private func configureAudioInputIfNeeded(from sampleBuffer: CMSampleBuffer) throws {
+        guard audioInput == nil else { return }
+        guard !sessionStarted else { return }
+        guard let assetWriter else { throw ScreenRecordingWriterError.cannotCreateWriter("") }
+        guard let formatDescription = CMSampleBufferGetFormatDescription(sampleBuffer) else {
+            throw ScreenRecordingWriterError.missingFormat
+        }
+
+        let input: AVAssetWriterInput
+        if let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(formatDescription),
+           asbd.pointee.mFormatID == kAudioFormatMPEG4AAC {
+            // Already AAC — pass through to the MP4 container.
+            input = AVAssetWriterInput(
+                mediaType: .audio,
+                outputSettings: nil,
+                sourceFormatHint: formatDescription
+            )
+        } else if let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(formatDescription) {
+            // ReplayKit usually delivers PCM; re-encode to AAC for MP4.
+            let sampleRate = asbd.pointee.mSampleRate
+            let channels = Int(asbd.pointee.mChannelsPerFrame)
+            guard sampleRate > 0, channels > 0 else {
+                throw ScreenRecordingWriterError.missingFormat
+            }
+
+            let audioSettings: [String: Any] = [
+                AVFormatIDKey: kAudioFormatMPEG4AAC,
+                AVSampleRateKey: sampleRate,
+                AVNumberOfChannelsKey: channels,
+                AVEncoderBitRateKey: 128_000,
+            ]
+            input = AVAssetWriterInput(
+                mediaType: .audio,
+                outputSettings: audioSettings,
+                sourceFormatHint: formatDescription
+            )
+        } else {
+            throw ScreenRecordingWriterError.missingFormat
+        }
+
+        input.expectsMediaDataInRealTime = true
+
+        guard assetWriter.canAdd(input) else {
+            let detail = assetWriter.error?.localizedDescription ?? "Could not add the audio track."
+            throw ScreenRecordingWriterError.cannotCreateWriter(detail)
+        }
+
+        assetWriter.add(input)
+        audioInput = input
+
+        let presentationTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+        if let sessionStartTime {
+            if CMTimeCompare(presentationTime, sessionStartTime) < 0 {
+                self.sessionStartTime = presentationTime
+            }
+        } else {
+            sessionStartTime = presentationTime
+        }
+    }
+
+    private func copySampleBuffer(_ sampleBuffer: CMSampleBuffer) -> CMSampleBuffer? {
+        var copy: CMSampleBuffer?
+        let status = CMSampleBufferCreateCopy(
+            allocator: kCFAllocatorDefault,
+            sampleBuffer: sampleBuffer,
+            sampleBufferOut: &copy
+        )
+        guard status == noErr else { return nil }
+        return copy
     }
 }

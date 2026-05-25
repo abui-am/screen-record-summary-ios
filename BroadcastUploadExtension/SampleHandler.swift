@@ -44,11 +44,18 @@ final class SampleHandler: RPBroadcastSampleHandler {
     }
 
     override func processSampleBuffer(_ sampleBuffer: CMSampleBuffer, with sampleBufferType: RPSampleBufferType) {
-        guard sampleBufferType == .video else { return }
-
         autoreleasepool {
             do {
-                try writer?.append(sampleBuffer: sampleBuffer)
+                switch sampleBufferType {
+                case .video:
+                    try writer?.append(sampleBuffer: sampleBuffer)
+                case .audioApp:
+                    try writer?.appendAudio(sampleBuffer: sampleBuffer)
+                case .audioMic:
+                    break
+                @unknown default:
+                    break
+                }
             } catch {
                 Self.logger.error("Append failed: \(error.localizedDescription, privacy: .public)")
                 finishWithMessage(error.localizedDescription)

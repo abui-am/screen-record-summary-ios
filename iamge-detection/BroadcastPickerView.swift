@@ -89,7 +89,8 @@ private struct SystemBroadcastPickerRepresentable: UIViewRepresentable {
         }
 
         func startObserving() {
-            wasCaptured = UIScreen.main.isCaptured || BroadcastRecordingHandoff.isBroadcastActive
+            BroadcastRecordingHandoff.syncBroadcastActive(isSystemCaptured: UIScreen.main.isCaptured)
+            wasCaptured = UIScreen.main.isCaptured
 
             observer = NotificationCenter.default.addObserver(
                 forName: UIScreen.capturedDidChangeNotification,
@@ -97,8 +98,9 @@ private struct SystemBroadcastPickerRepresentable: UIViewRepresentable {
                 queue: .main
             ) { [weak self] _ in
                 guard let self else { return }
+                BroadcastRecordingHandoff.syncBroadcastActive(isSystemCaptured: UIScreen.main.isCaptured)
 
-                let isCaptured = UIScreen.main.isCaptured || BroadcastRecordingHandoff.isBroadcastActive
+                let isCaptured = UIScreen.main.isCaptured
                 if isCaptured, !self.wasCaptured {
                     self.wasCaptured = true
                     self.onBroadcastStarted()
