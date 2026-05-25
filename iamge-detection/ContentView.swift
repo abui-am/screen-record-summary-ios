@@ -460,8 +460,12 @@ struct ContentView: View {
 
     private var timelineSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Per-segment timeline")
-                .font(.headline)
+            HStack {
+                Text("Per-segment timeline")
+                    .font(.headline)
+                Spacer(minLength: 0)
+            }
+            sourceLegend
 
             ForEach(viewModel.frameTimeline) { entry in
                 HStack(alignment: .center, spacing: 12) {
@@ -477,61 +481,93 @@ struct ContentView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 4) {
-                        HStack(alignment: .firstTextBaseline) {
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
                             Text(formatTimestamp(entry.timestamp))
                                 .font(.caption.monospacedDigit())
                                 .foregroundStyle(.secondary)
                             Text(entry.label)
                                 .font(.caption.bold())
+                            SourceBadgeRow(
+                                sources: OutputSourceCatalog.segmentLabelSources(
+                                    hasAudio: entry.audioLabel != nil || !(entry.audioTranscript ?? "").isEmpty
+                                )
+                            )
                         }
                         if let handle = entry.creatorHandle {
-                            Label(handle, systemImage: "person.crop.circle")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
+                            HStack(alignment: .top, spacing: 6) {
+                                SourceBadge(source: .vision)
+                                Label(handle, systemImage: "person.crop.circle")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                         if let summary = entry.contentSummary, !summary.isEmpty {
-                            Label(summary, systemImage: "text.viewfinder")
-                                .font(.caption2)
-                                .foregroundStyle(.primary)
-                                .fixedSize(horizontal: false, vertical: true)
+                            HStack(alignment: .top, spacing: 6) {
+                                SourceBadgeRow(sources: OutputSourceCatalog.contentSummarySources(for: entry))
+                                Label(summary, systemImage: "text.viewfinder")
+                                    .font(.caption2)
+                                    .foregroundStyle(.primary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
                         }
                         if let videoPrompt = entry.videoMatchedPrompt {
-                            Text("Video: \(videoPrompt)")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
+                            HStack(alignment: .top, spacing: 6) {
+                                SourceBadge(source: .mobileCLIP)
+                                Text("Video: \(videoPrompt)")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
                         } else if let matchedPrompt = entry.matchedPrompt {
-                            Text(matchedPrompt)
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
+                            HStack(alignment: .top, spacing: 6) {
+                                SourceBadge(source: .mobileCLIP)
+                                Text(matchedPrompt)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
                         }
                         if let audioLabel = entry.audioLabel,
                            let audioPrompt = entry.audioMatchedPrompt {
-                            Text("Audio (\(audioLabel)): \(audioPrompt)")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
+                            HStack(alignment: .top, spacing: 6) {
+                                SourceBadgeRow(sources: [.mobileCLIP, .whisper])
+                                Text("Audio (\(audioLabel)): \(audioPrompt)")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
                         }
                         if let tone = entry.audioTone, !tone.isEmpty {
-                            Label(tone, systemImage: "waveform.badge.magnifyingglass")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
+                            HStack(alignment: .top, spacing: 6) {
+                                SourceBadge(source: .audioTone)
+                                Label(tone, systemImage: "waveform.badge.magnifyingglass")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
                         }
                         if let transcript = entry.audioTranscript, !transcript.isEmpty {
-                            Label(transcript, systemImage: "text.quote")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
+                            HStack(alignment: .top, spacing: 6) {
+                                SourceBadge(source: .whisper)
+                                Label(transcript, systemImage: "text.quote")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
                         } else if entry.audioTone == nil, entry.audioLabel != nil {
-                            Text("No speech detected")
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
+                            HStack(alignment: .top, spacing: 6) {
+                                SourceBadge(source: .whisper)
+                                Text("No speech detected")
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
+                            }
                         }
-                        Text(String(format: "%.1f%%", entry.probability * 100))
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(.secondary)
+                        HStack(spacing: 6) {
+                            SourceBadge(source: .mobileCLIP)
+                            Text(String(format: "%.1f%%", entry.probability * 100))
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                        }
                     }
 
                     Spacer(minLength: 0)
@@ -542,8 +578,11 @@ struct ContentView: View {
 
     private func creatorsSection(_ creators: [String]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Creators seen")
-                .font(.headline)
+            HStack(spacing: 6) {
+                Text("Creators seen")
+                    .font(.headline)
+                SourceBadge(source: .vision)
+            }
             Text(creators.joined(separator: ", "))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
@@ -563,11 +602,9 @@ struct ContentView: View {
             HStack(spacing: 6) {
                 Text("Content viewed")
                     .font(.headline)
-                if isAISummary {
-                    Label("Apple Intelligence", systemImage: "sparkles")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                SourceBadgeRow(
+                    sources: OutputSourceCatalog.recordingSummarySources(isAI: isAISummary)
+                )
             }
             Text(summary)
                 .font(.subheadline)
@@ -618,22 +655,40 @@ struct ContentView: View {
 
     private var resultsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
+            sourceLegend
+
             if let top = viewModel.matches.first {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Best match")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    HStack(spacing: 6) {
+                        Text("Best match")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        SourceBadgeRow(
+                            sources: OutputSourceCatalog.classificationSources(
+                                screenRecording: viewModel.inputMode == .screenCapture,
+                                hasAudioInput: viewModel.frameTimeline.contains {
+                                    $0.audioLabel != nil || !($0.audioTranscript ?? "").isEmpty
+                                }
+                            )
+                        )
+                    }
                     Text(top.label)
                         .font(.title3.bold())
                     if let matchedPrompt = top.matchedPrompt {
-                        Text(matchedPrompt)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+                        HStack(alignment: .top, spacing: 6) {
+                            SourceBadge(source: .mobileCLIP)
+                            Text(matchedPrompt)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
-                    Text(String(format: "cosine %.3f · %.1f%%", top.score, top.probability * 100))
-                        .font(.subheadline.monospacedDigit())
-                        .foregroundStyle(.secondary)
+                    HStack(spacing: 6) {
+                        SourceBadge(source: .mobileCLIP)
+                        Text(String(format: "cosine %.3f · %.1f%%", top.score, top.probability * 100))
+                            .font(.subheadline.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 .padding()
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -646,13 +701,19 @@ struct ContentView: View {
             ForEach(viewModel.matches) { match in
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(match.label)
-                            .font(.subheadline.bold())
+                        HStack(spacing: 6) {
+                            Text(match.label)
+                                .font(.subheadline.bold())
+                            SourceBadge(source: .mobileCLIP)
+                        }
                         if let matchedPrompt = match.matchedPrompt {
-                            Text(matchedPrompt)
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
+                            HStack(alignment: .top, spacing: 6) {
+                                SourceBadge(source: .mobileCLIP)
+                                Text(matchedPrompt)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
                         }
                     }
                     Spacer(minLength: 8)
@@ -670,16 +731,22 @@ struct ContentView: View {
             }
 
             if !viewModel.promptMatches.isEmpty {
-                Text("Top prompts")
-                    .font(.headline)
-                    .padding(.top, 4)
+                HStack(spacing: 6) {
+                    Text("Top prompts")
+                        .font(.headline)
+                    SourceBadge(source: .mobileCLIP)
+                }
+                .padding(.top, 4)
 
                 ForEach(viewModel.promptMatches.prefix(8)) { match in
                     HStack(alignment: .top) {
-                        Text(match.label)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+                        HStack(alignment: .top, spacing: 6) {
+                            SourceBadge(source: .mobileCLIP)
+                            Text(match.label)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                         Spacer(minLength: 8)
                         Text(String(format: "%.1f%%", match.probability * 100))
                             .font(.caption2.monospacedDigit())
@@ -689,6 +756,10 @@ struct ContentView: View {
                 }
             }
         }
+    }
+
+    private var sourceLegend: some View {
+        SourceBadgeRow(sources: [.mobileCLIP, .whisper, .vision, .audioTone, .foundationModels, .stitched])
     }
 }
 
